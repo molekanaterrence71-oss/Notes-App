@@ -18,7 +18,7 @@
 // STEP 4: Copy your "anon" / "public" API key and paste it into the second variable below
 
 const SUPABASE_URL = "https://uesfpyjmwwjkunthimva.supabase.co/rest/v1/Notes";
-const SUPABASE_ANON_KEY = "https://uesfpyjmwwjkunthimva.supabase.co/rest/v1/";
+const SUPABASE_ANON_KEY = "sb_publishable_AJXq91T5tgRtnct2h97Nkw_VSVHO35v";
 
 // ==========================================
 // 2. STATE IDENTIFIERS & VARIABLES
@@ -71,9 +71,65 @@ function init() {
  * If credentials are configured, it initializes the Supabase client.
  * Otherwise, it activates Local Storage Mode so the app is immediately usable.
  */
+// Helper to parse title categories, e.g., "[Personal] Project outline" -> {category: "Personal", title: "Project outline"}
+function parseTitleAndCategory(fullTitle) {
+  const match = (fullTitle || "").match(/^\[(Personal|Work|Idea|Task)\]\s*(.*)/i);
+  if (match) {
+    return {
+      category: match[1],
+      title: match[2]
+    };
+  }
+  return {
+    category: "Personal", // Fallback Default
+    title: fullTitle || ""
+  };
+}
+
+// Helper to format title with category prefix for standard database compatibility
+function formatTitleWithCategory(category, title) {
+  return `[${category}] ${title.trim()}`;
+}
+
+/**
+ * Validates if the user has changed the default placeholder Supabase keys.
+ * If credentials are configured, it initializes the Supabase client.
+ * Otherwise, it activates Local Storage Mode so the app is immediately usable.
+ */
 function checkSupabaseConfiguration() {
   const isPlaceholderUrl = !SUPABASE_URL || SUPABASE_URL === "YOUR_SUPABASE_URL_HERE" || SUPABASE_URL.trim() === "";
   const isPlaceholderKey = !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === "YOUR_SUPABASE_ANON_KEY_HERE" || SUPABASE_ANON_KEY.trim() === "";
+
+  let trimmedUrl = (SUPABASE_URL || "").trim();
+  let trimmedKey = (SUPABASE_ANON_KEY || "").trim();
+
+  // HEURISTIC AUTO-CLEAN: If the user pasted a path suffix (e.g. /rest/v1/Notes), let's extract the clean base domain!
+  if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
+    try {
+      const urlObj = new URL(trimmedUrl);
+      if (urlObj.pathname !== "/" && urlObj.pathname !== "") {
+        console.log("Auto-cleaning Supabase URL pathname from " + trimmedUrl + " to " + urlObj.origin);
+        trimmedUrl = urlObj.origin;
+      }
+    } catch (e) {
+      // Ignore and keep as is
+    }
+  }
+
+  // Validate URL format after cleaning
+  let isInvalidUrl = false;
+  try {
+    const urlObj = new URL(trimmedUrl);
+    if (urlObj.pathname !== "/" && urlObj.pathname !== "") {
+      isInvalidUrl = true;
+    }
+  } catch (e) {
+    isInvalidUrl = true;
+  }
+
+  // Validate Key format: Anon Key is a JWT token (never a URL, contains dots, usually long)
+  const isKeyUrl = trimmedKey.startsWith("http://") || trimmedKey.startsWith("https://");
+  const isInvalidKeyFormat = trimmedKey.length < 50 || !trimmedKey.includes(".") || isKeyUrl;
 
   if (isPlaceholderUrl || isPlaceholderKey) {
     // Run in backup local mode
@@ -81,11 +137,48 @@ function checkSupabaseConfiguration() {
     showSetupWarning();
     setConnectionStatus("offline");
     showToast("Running in Local Storage Sandbox mode. Set up Supabase keys to save in the cloud!", "info");
+  } else if (isInvalidUrl || isInvalidKeyFormat) {
+    isLocalOnly = true;
+    
+    // Customize setup warning text to help the user resolve configuration mistakes immediately
+    if (setupWarningBanner) {
+      let customHeading = "⚠️ Configuration Issue Detected";
+      let customInstructions = "";
+      
+      if (isKeyUrl) {
+        customInstructions = `Your <strong>SUPABASE_ANON_KEY</strong> in <code>script.js</code> is currently set to a URL (<code>${escapeHTML(trimmedKey)}</code>). This must be your project's alphanumeric <strong>anon/public API key (JWT)</strong> from your Supabase Dashboard. Navigate to <em>Settings -> API</em> and copy the long token starting with <code>eyJ</code>.`;
+      } else if (isInvalidKeyFormat) {
+        customInstructions = "Your <strong>SUPABASE_ANON_KEY</strong> in <code>script.js</code> does not look like a valid JWT token. Please make sure to copy the full, long token starting with <code>eyJ</code> from your Supabase Project Settings -> API page.";
+      } else if (isInvalidUrl) {
+        customInstructions = `Your <strong>SUPABASE_URL</strong> is configured incorrectly. It should contain only the base domain (e.g., <code>https://xxxxx.supabase.co</code>) without any extra sub-paths.`;
+      }
+
+      setupWarningBanner.innerHTML = `
+        <p style="color: #991b1b; padding: 0.5rem 0;">
+          <strong>${customHeading}:</strong> ${customInstructions}
+          <br><br>
+          <em>The app will automatically fall back to saving your notes locally until this is corrected!</em>
+        </p>
+      `;
+    }
+    
+    showSetupWarning();
+    setConnectionStatus("offline");
+
+    let errorHelpMsg = "Invalid Supabase key format detected.";
+    if (isKeyUrl) {
+      errorHelpMsg = "Error: The anon API Key cannot be a URL! Paste your long JWT key starting with 'eyJ'.";
+    } else if (isInvalidUrl) {
+      errorHelpMsg = "Error: The Supabase URL should not contain paths. Use https://xxxxx.supabase.co";
+    }
+
+    showToast(errorHelpMsg, "error");
+    console.warn("Supabase configuration format warning:", errorHelpMsg);
   } else {
     try {
       // Connect to real Supabase via the global window object loaded from the CDN link
       if (window.supabase) {
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabaseClient = window.supabase.createClient(trimmedUrl, trimmedKey);
         isLocalOnly = false;
         hideSetupWarning();
         setConnectionStatus("online");
@@ -147,14 +240,45 @@ async function fetchNotes() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      notesCache = data || [];
+      if (error) {
+        console.error("Supabase API query issue, falling back to local storage:", error);
+        let errorMsg = error.message || "Unknown database rejection.";
+        
+        // Show setup advice on screen so they know how to configure their schema / RLS
+        if (setupWarningBanner) {
+          setupWarningBanner.innerHTML = `
+            <p style="color: #b45309; padding: 0.5rem 0;">
+              <strong>⚠️ Database Check:</strong> Unable to load the <code>notes</code> table. 
+              <br><em>Error: ${escapeHTML(errorMsg)}</em>
+              <br><br>
+              <strong>Common solutions:</strong>
+              <br>1. Log into Supabase and ensure you have created a table named exactly <strong><code>notes</code></strong>.
+              <br>2. Set up these table columns: <code>id</code> (int8, primary key), <code>title</code> (text), <code>content</code> (text), and <code>created_at</code> (timestamp).
+              <br>3. Check Row Level Security (RLS) rules - allow anonymous read &amp; write, or disable for initial testing.
+            </p>
+          `;
+          showSetupWarning();
+        }
+        setConnectionStatus("offline");
+
+        // Load local copy so they can still type and interact!
+        const localData = localStorage.getItem("supabase_notes_fallback");
+        notesCache = localData ? JSON.parse(localData) : getPlaceholderNotes();
+      } else {
+        notesCache = data || [];
+        hideSetupWarning();
+        setConnectionStatus("online");
+      }
     }
     
     renderNotes();
   } catch (error) {
     console.error("Error fetching notes:", error);
-    showToast("Error loading notes: " + error.message, "error");
+    // Suppress unhandled exceptions that cause CORS Script errors
+    const localData = localStorage.getItem("supabase_notes_fallback");
+    notesCache = localData ? JSON.parse(localData) : getPlaceholderNotes();
+    renderNotes();
+    setConnectionStatus("offline");
   }
 }
 
@@ -291,10 +415,15 @@ function renderNotes() {
     // Format timestamp nicely for humans
     const formattedDate = formatTimestamp(note.created_at);
 
+    // Parse category and actual title
+    const parsed = parseTitleAndCategory(note.title);
+    const categoryClass = parsed.category.toLowerCase();
+
     return `
       <div id="note-${note.id}" class="note-card">
+        <span class="note-category-badge badge-${categoryClass}">${parsed.category}</span>
         <div class="note-body">
-          <h3 class="note-card-title">${escapeHTML(note.title)}</h3>
+          <h3 class="note-card-title">${escapeHTML(parsed.title)}</h3>
           <p class="note-card-content">${escapeHTML(note.content)}</p>
         </div>
         <div class="note-footer">
@@ -324,8 +453,19 @@ window.triggerEditNote = function(id) {
   if (!note) return;
   
   activeEditId = id;
-  editTitleInput.value = note.title;
+  const parsed = parseTitleAndCategory(note.title);
+  
+  editTitleInput.value = parsed.title;
   editContentInput.value = note.content;
+  
+  // Highlighting the correct radio input inside Edit modal
+  const categoryRadio = document.querySelector(`input[name="edit-note-category"][value="${parsed.category}"]`);
+  if (categoryRadio) {
+    categoryRadio.checked = true;
+  } else {
+    const defaultRadio = document.querySelector(`input[name="edit-note-category"][value="Personal"]`);
+    if (defaultRadio) defaultRadio.checked = true;
+  }
   
   openModal();
 };
@@ -346,15 +486,24 @@ function registerEventListeners() {
     const contentValue = noteContentInput.value.trim();
     
     if (!titleValue || !contentValue) {
-      showToast("Please enter both a title and some content content.", "error");
+      showToast("Please enter both a title and some note content.", "error");
       return;
     }
     
-    addNote(titleValue, contentValue);
+    // Grab selected category choice
+    const categoryInput = document.querySelector('input[name="note-category"]:checked');
+    const categoryValue = categoryInput ? categoryInput.value : "Personal";
     
-    // Clear the form
+    const titleWithCategory = formatTitleWithCategory(categoryValue, titleValue);
+    addNote(titleWithCategory, contentValue);
+    
+    // Clear the form and reset category
     noteTitleInput.value = "";
     noteContentInput.value = "";
+    
+    const defaultRadio = document.querySelector('input[name="note-category"][value="Personal"]');
+    if (defaultRadio) defaultRadio.checked = true;
+    
     noteTitleInput.focus();
   });
 
@@ -370,8 +519,14 @@ function registerEventListeners() {
       return;
     }
     
+    // Grab selected edit category choice
+    const categoryInput = document.querySelector('input[name="edit-note-category"]:checked');
+    const categoryValue = categoryInput ? categoryInput.value : "Personal";
+    
+    const titleWithCategory = formatTitleWithCategory(categoryValue, updatedTitle);
+    
     if (activeEditId !== null) {
-      updateNote(activeEditId, updatedTitle, updatedContent);
+      updateNote(activeEditId, titleWithCategory, updatedContent);
     }
   });
 
@@ -499,13 +654,13 @@ function getPlaceholderNotes() {
   return [
     {
       id: 1,
-      title: "Welcome to your Notes Dashboard!",
-      content: "This contains default starter material to showcase styling. Paste your real Supabase URL and Anon Key inside root file 'script.js' on lines 16 and 17 to immediately backup all data to Supabase Cloud!",
+      title: "[Idea] Welcome to your Notes Dashboard!",
+      content: "This contains default starter material to showcase styling. Paste your real Supabase URL and Anon Key inside root file 'script.js' on lines 20 and 21 to immediately backup all data to Supabase Cloud!",
       created_at: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
     },
     {
       id: 2,
-      title: "Getting Started with Supabase Table schema",
+      title: "[Work] Getting Started with Supabase Table schema",
       content: "Ensure your database contains a table named 'notes' with columns:\n- id (int8, primary key)\n- title (text)\n- content (text)\n- created_at (timestamp with time zone, default: now())\n\nHappy coding!",
       created_at: new Date(Date.now() - 86400000).toISOString() // 1 day ago
     }
