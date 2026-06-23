@@ -272,6 +272,111 @@ main {
   resize: vertical;
 }
 
+/* Custom Category Selector styles */
+.category-picker {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.category-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-body);
+  transition: var(--transition);
+  position: relative;
+}
+
+.category-opt input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.category-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--text-light);
+  transition: var(--transition);
+}
+
+/* Category colors definition */
+.opt-personal .category-dot { background-color: #6366f1; }
+.opt-work .category-dot { background-color: #3b82f6; }
+.opt-idea .category-dot { background-color: #10b981; }
+.opt-task .category-dot { background-color: #f59e0b; }
+
+/* Active States */
+.category-opt:hover {
+  border-color: var(--text-light);
+  background-color: #f1f5f9;
+}
+
+.category-opt:has(input:checked) {
+  transform: scale(1.02);
+  font-weight: 600;
+}
+
+.category-opt.opt-personal:has(input:checked) {
+  background-color: #e0e7ff;
+  border-color: #6366f1;
+  color: #4f46e5;
+}
+.category-opt.opt-work:has(input:checked) {
+  background-color: #dbeafe;
+  border-color: #3b82f6;
+  color: #2563eb;
+}
+.category-opt.opt-idea:has(input:checked) {
+  background-color: #d1fae5;
+  border-color: #10b981;
+  color: #059669;
+}
+.category-opt.opt-task:has(input:checked) {
+  background-color: #fef3c7;
+  border-color: #f59e0b;
+  color: #d97706;
+}
+
+.category-opt:has(input:checked) .category-dot {
+  transform: scale(1.3);
+}
+
+/* Beautiful Category Decorative Badges on Note Cards */
+.note-category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 50px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  width: fit-content;
+}
+
+.badge-personal { background-color: #e0e7ff; color: #4f46e5; border: 1px solid rgba(99, 102, 241, 0.15); }
+.badge-work { background-color: #dbeafe; color: #2563eb; border: 1px solid rgba(59, 130, 246, 0.15); }
+.badge-idea { background-color: #d1fae5; color: #059669; border: 1px solid rgba(16, 185, 129, 0.15); }
+.badge-task { background-color: #fef3c7; color: #d97706; border: 1px solid rgba(245, 158, 11, 0.15); }
+
+.badge-personal::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background-color: #6366f1; }
+.badge-work::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background-color: #3b82f6; }
+.badge-idea::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background-color: #10b981; }
+.badge-task::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background-color: #f59e0b; }
+
 .btn {
   width: 100%;
   padding: 0.85rem 1.5rem;
