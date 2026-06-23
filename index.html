@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Primary Title -->
+    <title>Notes App - Cloud Database Playground</title>
+    
+    <!-- Link our custom clean modern CSS variables stylesheet -->
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+
+    <!-- 1. HEADER & BRAND NAVIGATION -->
+    <header id="header-bar">
+      <div class="nav-container">
+        <a href="#" class="brand">
+          <div class="brand-icon">N</div>
+          <span class="brand-name">Notes<span>App</span></span>
+        </a>
+        
+        <!-- Connection Status Indicator Pill -->
+        <div id="connection-status" class="connection-status local-mode" title="Click edit instructions to fill in Supabase project secrets!">
+          <div class="pulse"></div>
+          <span id="connection-status-text">Checking Database</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. MAIN WORKSPACE ROW -->
+    <main id="main-content">
+      
+      <!-- LEFT FIELD PANEL: FORM CONFIGURATION -->
+      <section id="left-workspace-panel">
+        
+        <!-- Setup Warning Alert Banner (Visible when default placeholder keys reside in script.js) -->
+        <div id="setup-warning-banner" class="setup-warning-banner" style="display: none;">
+          <p>
+            <strong>⚡ Local Demo Active:</strong> You are currently using the app in Local Storage Sandbox mode. To make your notes persistent on the web, open <code>script.js</code> and enter your Supabase URL &amp; Anon Key!
+          </p>
+        </div>
+
+        <div class="form-card">
+          <h2 class="form-title">
+            <!-- Simple SVG Pen icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-plus"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15h6"/><path d="M12 12v6"/></svg>
+            Create a New Note
+          </h2>
+          
+          <form id="add-note-form" novalidate>
+            <div class="form-group">
+              <label for="note-title" class="form-label">Note Title</label>
+              <input 
+                type="text" 
+                id="note-title" 
+                class="form-input" 
+                placeholder="Name your key ideas..." 
+                required 
+                maxlength="100"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="note-content" class="form-label">Content details</label>
+              <textarea 
+                id="note-content" 
+                class="form-textarea" 
+                placeholder="Draft note content, task updates, or insights..." 
+                required
+              ></textarea>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              Save Note Row
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- RIGHT FIELD PANEL: NOTES CONTAINER -->
+      <section id="right-workspace-panel" class="notes-container">
+        
+        <div class="notes-header">
+          <div class="notes-title-group">
+            <h2 class="brand-name" style="font-size: 1.25rem;">Stored <span>Notes</span></h2>
+            <span id="notes-count-badge" class="notes-count">0</span>
+          </div>
+          
+          <!-- View options layout -->
+          <div class="notes-controls">
+            <!-- Grid Option -->
+            <button id="grid-view-btn" class="view-btn active" title="Grid View">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-grid"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+            </button>
+            <!-- List Option -->
+            <button id="list-view-btn" class="view-btn" title="List View">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Populated Cards via template rendering javascript -->
+        <div id="notes-list" class="notes-grid grid-layout">
+          <!-- Fallback loading indicator template -->
+          <div style="grid-column: 1 / -1; text-align: center; padding: 3rem;">
+            <p style="color: var(--text-muted);">Syncing with your database workspace...</p>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- 3. EDITING DIALOGUE MODAL OVERLAY -->
+    <div id="edit-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="modal-title">Edit Note</h3>
+          <button id="modal-close-btn" class="modal-close" title="Close Modal">&times;</button>
+        </div>
+        
+        <form id="edit-note-form" novalidate>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="edit-note-title" class="form-label">Note Title</label>
+              <input 
+                type="text" 
+                id="edit-note-title" 
+                class="form-input" 
+                placeholder="Change note title..." 
+                required 
+                maxlength="100"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="edit-note-content" class="form-label">Content details</label>
+              <textarea 
+                id="edit-note-content" 
+                class="form-textarea" 
+                placeholder="Modify your details or insights..." 
+                required
+              ></textarea>
+            </div>
+          </div>
+          
+          <div class="modal-footer">
+            <button type="button" id="modal-cancel-btn" class="btn btn-secondary" style="width: auto;">Cancel</button>
+            <button type="submit" class="btn btn-primary" style="width: auto;">Update &amp; Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 4. TOAST NOTIFICATION CORNER -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- 5. STANDALONE FOOTER -->
+    <footer id="footer-infobar">
+      <p>Built with vanilla HTML, CSS, &amp; JavaScript. Powered by <a href="https://supabase.com" target="_blank" rel="noopener noreferrer">Supabase Cloud Database</a>.</p>
+    </footer>
+
+    <!-- 6. EXTERNAL SCRIPTS: SUPABASE JS LIBRARY VIA CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.4/dist/umd/supabase.js" crossorigin="anonymous"></script>
+    
+    <!-- 7. APPLICATION ACTIONS SCRIPTS -->
+    <script src="/script.js" defer></script>
+  </body>
+</html>
